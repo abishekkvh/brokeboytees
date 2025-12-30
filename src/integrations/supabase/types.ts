@@ -67,41 +67,65 @@ export type Database = {
       }
       orders: {
         Row: {
+          carrier: string | null
           created_at: string
+          delivered_at: string | null
+          estimated_delivery: string | null
           id: string
           notes: string | null
+          payment_status: string | null
+          shipped_at: string | null
           shipping_address: string | null
           shipping_city: string | null
           shipping_country: string | null
           shipping_postal_code: string | null
           status: Database["public"]["Enums"]["order_status"]
+          stripe_payment_intent: string | null
+          stripe_session_id: string | null
           total_amount: number
+          tracking_number: string | null
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          carrier?: string | null
           created_at?: string
+          delivered_at?: string | null
+          estimated_delivery?: string | null
           id?: string
           notes?: string | null
+          payment_status?: string | null
+          shipped_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
           shipping_postal_code?: string | null
           status?: Database["public"]["Enums"]["order_status"]
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
           total_amount: number
+          tracking_number?: string | null
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          carrier?: string | null
           created_at?: string
+          delivered_at?: string | null
+          estimated_delivery?: string | null
           id?: string
           notes?: string | null
+          payment_status?: string | null
+          shipped_at?: string | null
           shipping_address?: string | null
           shipping_city?: string | null
           shipping_country?: string | null
           shipping_postal_code?: string | null
           status?: Database["public"]["Enums"]["order_status"]
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
           total_amount?: number
+          tracking_number?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -209,14 +233,71 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wishlist: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wishlist_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "user"
       order_status:
         | "pending"
         | "processing"
@@ -351,6 +432,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "user"],
       order_status: [
         "pending",
         "processing",
