@@ -24,10 +24,12 @@ export function useProducts(filters?: {
         .from('products')
         .select('*');
 
+      // Category Filter
       if (filters?.category) {
         query = query.eq('category', filters.category);
       }
 
+      // Price Filters
       if (filters?.minPrice !== undefined) {
         query = query.gte('price', filters.minPrice);
       }
@@ -36,19 +38,25 @@ export function useProducts(filters?: {
         query = query.lte('price', filters.maxPrice);
       }
 
+      // Featured Filter (Manual Flag)
       if (filters?.featured) {
         query = query.eq('is_featured', true);
       }
 
+      // UPDATED: "New" Filter (Automatic 45-day Logic)
       if (filters?.isNew) {
-        query = query.eq('is_new', true);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 45);
+        query = query.gt('created_at', cutoffDate.toISOString());
       }
 
+      // Sorting
       if (filters?.sortBy === 'price-asc') {
         query = query.order('price', { ascending: true });
       } else if (filters?.sortBy === 'price-desc') {
         query = query.order('price', { ascending: false });
       } else {
+        // Default sort: Newest first
         query = query.order('created_at', { ascending: false });
       }
 
@@ -93,14 +101,19 @@ export function useFeaturedProducts() {
   });
 }
 
+// UPDATED: Dedicated hook for "New Drops" page
+// Automatically fetches only items from the last 45 days
 export function useNewProducts() {
   return useQuery({
     queryKey: ['products', 'new'],
     queryFn: async () => {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 45);
+
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('is_new', true)
+        .gt('created_at', cutoffDate.toISOString()) // gt = Greater Than (newer than)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

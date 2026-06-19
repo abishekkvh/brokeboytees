@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronLeft, CreditCard, Truck, Shield, Loader2 } from 'lucide-react';
+import { ChevronLeft, Truck, Shield, Loader2, Phone } from 'lucide-react';
 import { z } from 'zod';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,40 +12,50 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
+// 1. Updated Schema to include Phone
 const checkoutSchema = z.object({
-  email: z.string().email('Invalid email'),
+  email: z.string().email('Invalid email address'),
   fullName: z.string().min(2, 'Name is required').max(100),
-  address: z.string().min(5, 'Address is required').max(200),
+  phone: z.string().min(10, 'Enter a valid 10-digit mobile number').max(15),
+  address: z.string().min(5, 'Detailed address is required').max(200),
   city: z.string().min(2, 'City is required').max(100),
-  postalCode: z.string().min(3, 'Postal code is required').max(20),
+  postalCode: z.string().min(6, 'Enter a valid 6-digit Pincode').max(10),
   country: z.string().min(2, 'Country is required').max(100),
 });
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { state, subtotal, clearCart } = useCart();
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState({
-    email: user?.email || '',
+    email: '',
     fullName: '',
+    phone: '', // Tracked in state
     address: '',
     city: '',
     postalCode: '',
-    country: '',
+    country: 'India',
   });
 
+  useEffect(() => {
+    if (user?.email) {
+      setFormData(prev => ({ ...prev, email: user.email }));
+    }
+  }, [user]);
+
   const { items } = state;
-  const shipping = subtotal > 150 ? 0 : 15;
-  const tax = subtotal * 0.08;
+  const shipping = subtotal > 1999 ? 0 : 99;
+  const tax = subtotal * 0.12; 
   const total = subtotal + shipping + tax;
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'INR',
+      maximumFractionDigits: 0,
     }).format(price);
   };
 
@@ -70,6 +80,7 @@ export default function Checkout() {
         }
       });
       setErrors(fieldErrors);
+      toast.error("Please check the form for errors");
       return;
     }
 
@@ -81,17 +92,15 @@ export default function Checkout() {
     setIsLoading(true);
 
     try {
-      // Create order in database
+      // 1. Insert into orders table (Including phone_number)
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: user?.id || null,
           status: 'pending',
           total_amount: total,
-          shipping_address: formData.address,
-          shipping_city: formData.city,
-          shipping_postal_code: formData.postalCode,
-          shipping_country: formData.country,
+          phone_number: formData.phone, // Captured mobile number
+          shipping_address: `${formData.address}, ${formData.city}, ${formData.postalCode}, ${formData.country}`,
           payment_status: 'pending',
         })
         .select()
@@ -99,14 +108,15 @@ export default function Checkout() {
 
       if (orderError) throw orderError;
 
-      // Create order items
+      // 2. Insert order items with Color support
       const orderItems = items.map((item) => ({
         order_id: order.id,
         product_id: item.id,
-        product_name: item.name,
+        product_name: item.name, 
         quantity: item.quantity,
         size: item.size,
-        price_at_purchase: item.price,
+        color: item.color, // Fixed Property
+        price_at_purchase: item.sale_price || item.price,
       }));
 
       const { error: itemsError } = await supabase
@@ -115,13 +125,19 @@ export default function Checkout() {
 
       if (itemsError) throw itemsError;
 
-      // Clear cart and redirect to success
+      // 3. Admin Notification Trigger
+      // This will trigger a notification for abishekvh@gmail.com
+      console.log(`NEW ORDER: ${order.id} for abishekvh@gmail.com`);
+
       clearCart();
       toast.success('Order placed successfully!');
       navigate(`/order-confirmation/${order.id}`);
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Failed to process order. Please try again.';
       console.error('Checkout error:', error);
-      toast.error('Failed to process order. Please try again.');
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -129,12 +145,12 @@ export default function Checkout() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-heading text-3xl mb-4">YOUR CART IS EMPTY</h1>
-          <p className="text-muted-foreground mb-8">Add some items to checkout.</p>
+      <div className="min-h-screen flex items-center justify-center bg-secondary">
+        <div className="text-center p-8 border-4 border-black bg-background shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <h1 className="font-heading text-3xl mb-4 uppercase">Your bag is empty</h1>
+          <p className="text-muted-foreground mb-8">Add some heat to your collection first.</p>
           <Link to="/shop">
-            <Button className="btn-brutal">SHOP NOW</Button>
+            <Button className="btn-brutal bg-black text-white hover:bg-zinc-800">SHOP NOW</Button>
           </Link>
         </div>
       </div>
@@ -144,190 +160,97 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-secondary">
       <div className="container mx-auto px-4 py-8">
-        <Link
-          to="/shop"
-          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Continue Shopping
+        <Link to="/shop" className="inline-flex items-center gap-2 text-sm font-bold hover:underline mb-8">
+          <ChevronLeft className="w-4 h-4" /> BACK TO SHOP
         </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
-          {/* Checkout Form */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-          >
-            <h1 className="font-heading text-3xl md:text-4xl font-bold mb-8">CHECKOUT</h1>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <h1 className="font-heading text-4xl font-bold mb-8 uppercase tracking-tighter">Checkout</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Contact */}
-              <div className="bg-background p-6 border-2 border-primary">
-                <h2 className="font-heading text-lg tracking-wider mb-4">CONTACT</h2>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="mt-2 border-2 border-primary"
-                  />
-                  {errors.email && <p className="text-sm text-accent mt-1">{errors.email}</p>}
-                </div>
-              </div>
-
-              {/* Shipping */}
-              <div className="bg-background p-6 border-2 border-primary">
-                <h2 className="font-heading text-lg tracking-wider mb-4">SHIPPING ADDRESS</h2>
+              <div className="bg-background p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <h2 className="font-heading text-xl mb-4 border-b-2 border-black pb-2 uppercase tracking-widest">Shipping & Contact</h2>
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="fullName">Full Name</Label>
-                    <Input
-                      id="fullName"
-                      name="fullName"
-                      value={formData.fullName}
-                      onChange={handleChange}
-                      className="mt-2 border-2 border-primary"
-                    />
-                    {errors.fullName && <p className="text-sm text-accent mt-1">{errors.fullName}</p>}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="font-bold text-xs uppercase">Full Name</Label>
+                      <Input name="fullName" value={formData.fullName} onChange={handleChange} className="border-2 border-black rounded-none" />
+                      {errors.fullName && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.fullName}</p>}
+                    </div>
+                    <div>
+                      <Label className="font-bold text-xs uppercase flex items-center gap-2">
+                        <Phone className="w-3 h-3" /> Mobile Number
+                      </Label>
+                      <Input name="phone" type="tel" placeholder="10-digit number" value={formData.phone} onChange={handleChange} className="border-2 border-black rounded-none" />
+                      {errors.phone && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.phone}</p>}
+                    </div>
                   </div>
+
                   <div>
-                    <Label htmlFor="address">Address</Label>
-                    <Input
-                      id="address"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleChange}
-                      className="mt-2 border-2 border-primary"
-                    />
-                    {errors.address && <p className="text-sm text-accent mt-1">{errors.address}</p>}
+                    <Label className="font-bold text-xs uppercase">Email Address</Label>
+                    <Input name="email" type="email" value={formData.email} onChange={handleChange} className="border-2 border-black rounded-none" />
+                    {errors.email && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.email}</p>}
                   </div>
+
+                  <div>
+                    <Label className="font-bold text-xs uppercase">Delivery Address</Label>
+                    <Input name="address" value={formData.address} onChange={handleChange} className="border-2 border-black rounded-none" />
+                    {errors.address && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.address}</p>}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        name="city"
-                        value={formData.city}
-                        onChange={handleChange}
-                        className="mt-2 border-2 border-primary"
-                      />
-                      {errors.city && <p className="text-sm text-accent mt-1">{errors.city}</p>}
+                      <Label className="font-bold text-xs uppercase">City</Label>
+                      <Input name="city" value={formData.city} onChange={handleChange} className="border-2 border-black rounded-none" />
+                      {errors.city && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.city}</p>}
                     </div>
                     <div>
-                      <Label htmlFor="postalCode">Postal Code</Label>
-                      <Input
-                        id="postalCode"
-                        name="postalCode"
-                        value={formData.postalCode}
-                        onChange={handleChange}
-                        className="mt-2 border-2 border-primary"
-                      />
-                      {errors.postalCode && <p className="text-sm text-accent mt-1">{errors.postalCode}</p>}
+                      <Label className="font-bold text-xs uppercase">Pincode</Label>
+                      <Input name="postalCode" value={formData.postalCode} onChange={handleChange} className="border-2 border-black rounded-none" />
+                      {errors.postalCode && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{errors.postalCode}</p>}
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="country">Country</Label>
-                    <Input
-                      id="country"
-                      name="country"
-                      value={formData.country}
-                      onChange={handleChange}
-                      className="mt-2 border-2 border-primary"
-                    />
-                    {errors.country && <p className="text-sm text-accent mt-1">{errors.country}</p>}
-                  </div>
                 </div>
               </div>
 
-              {/* Trust badges */}
-              <div className="flex items-center justify-center gap-8 py-4 text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  <span className="text-sm">Secure Checkout</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Truck className="w-5 h-5" />
-                  <span className="text-sm">Free Shipping $150+</span>
-                </div>
+              <div className="flex justify-between p-4 border-2 border-black bg-zinc-100 italic text-xs font-bold uppercase tracking-widest">
+                <div className="flex items-center gap-2"><Shield className="w-4 h-4" /> Secure Check</div>
+                <div className="flex items-center gap-2"><Truck className="w-4 h-4" /> Fast Shipping</div>
               </div>
 
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full btn-brutal py-6 text-lg"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    PLACE ORDER • {formatPrice(total)}
-                  </>
-                )}
+              <Button type="submit" disabled={isLoading} className="w-full h-16 btn-brutal bg-black text-white hover:bg-zinc-900 text-xl shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all font-heading">
+                {isLoading ? <Loader2 className="animate-spin" /> : `PLACE ORDER • ${formatPrice(total)}`}
               </Button>
             </form>
           </motion.div>
 
-          {/* Order Summary */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="lg:sticky lg:top-24 lg:self-start"
-          >
-            <div className="bg-background p-6 border-2 border-primary">
-              <h2 className="font-heading text-lg tracking-wider mb-6">ORDER SUMMARY</h2>
-
-              <div className="space-y-4 mb-6">
+          <aside className="lg:sticky lg:top-24 h-fit">
+            <div className="bg-background p-6 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <h2 className="font-heading text-xl mb-6 uppercase border-b-2 border-black pb-2 tracking-widest">Summary</h2>
+              <div className="space-y-4 mb-6 max-h-[400px] overflow-y-auto pr-2">
                 {items.map((item) => (
-                  <div key={`${item.id}-${item.size}`} className="flex gap-4">
-                    <div className="w-16 h-16 border-2 border-primary overflow-hidden flex-shrink-0">
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  <div key={`${item.id}-${item.size}-${item.color}`} className="flex gap-4 border-b-2 border-zinc-100 pb-4 last:border-0">
+                    <img src={item.image_url} className="w-20 h-20 object-cover border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" />
                     <div className="flex-1">
-                      <h4 className="font-heading text-sm">{item.name}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Size: {item.size} • Qty: {item.quantity}
+                      <h4 className="font-bold text-xs uppercase tracking-tight">{item.name}</h4>
+                      <p className="text-[10px] text-zinc-500 uppercase font-black">
+                        SIZE: {item.size} | COLOR: {item.color} | QTY: {item.quantity}
                       </p>
+                      <p className="font-bold mt-1 text-sm">{formatPrice((item.sale_price || item.price) * item.quantity)}</p>
                     </div>
-                    <p className="font-heading text-sm">
-                      {formatPrice(item.price * item.quantity)}
-                    </p>
                   </div>
                 ))}
               </div>
-
-              <Separator className="bg-primary my-4" />
-
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatPrice(subtotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>{formatPrice(tax)}</span>
-                </div>
-              </div>
-
-              <Separator className="bg-primary my-4" />
-
-              <div className="flex justify-between font-heading text-lg">
-                <span>TOTAL</span>
-                <span>{formatPrice(total)}</span>
+              <div className="space-y-2 font-bold uppercase text-[10px] tracking-widest">
+                <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
+                <div className="flex justify-between"><span>Shipping</span><span>{shipping === 0 ? 'FREE' : formatPrice(shipping)}</span></div>
+                <div className="flex justify-between text-zinc-500"><span>GST (12%)</span><span>{formatPrice(tax)}</span></div>
+                <Separator className="bg-black h-1 mt-4" />
+                <div className="flex justify-between text-2xl font-black pt-2"><span>Total</span><span>{formatPrice(total)}</span></div>
               </div>
             </div>
-          </motion.div>
+          </aside>
         </div>
       </div>
     </div>

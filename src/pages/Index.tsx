@@ -44,7 +44,7 @@ export default function Index() {
         <div className="flex animate-marquee whitespace-nowrap">
           {[...Array(4)].map((_, i) => (
             <span key={i} className="font-heading text-sm md:text-base tracking-widest mx-8">
-              FREE SHIPPING WORLDWIDE • NEW DROP FRIDAY • LIMITED STOCK • BROKEBOY EXCLUSIVE •
+              FREE SHIPPING AROUND INDIA • NEW DROP FRIDAY • LIMITED STOCK • BROKEBOYTEES EXCLUSIVE •
             </span>
           ))}
         </div>

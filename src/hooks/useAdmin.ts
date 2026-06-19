@@ -1,205 +1,120 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { toast } from 'sonner';
 
-export function useAdmin() {
-  const { user } = useAuth();
+// Type for strict status safety
+export type OrderStatus = "pending" | "processing" | "shipped" | "delivered" | "cancelled";
 
-  const { data: isAdmin, isLoading: isCheckingAdmin } = useQuery({
-    queryKey: ['isAdmin', user?.id],
+// 1. STATS (Dashboard)
+export const useAdminStats = () => {
+  return useQuery({
+    queryKey: ['adminStats'],
     queryFn: async () => {
-      if (!user) return false;
-      
-      const { data, error } = await supabase
-        .rpc('has_role', { _user_id: user.id, _role: 'admin' });
+      const { data: products } = await supabase.from('products').select('*');
+      const { data: orders } = await supabase.from('orders').select('total_amount, status');
 
-      if (error) return false;
-      return data;
-    },
-    enabled: !!user,
+      const totalRevenue = orders?.reduce((sum, order) => sum + Number(order.total_amount || 0), 0) || 0;
+      const activeOrders = orders?.filter(o => o.status === 'pending' || o.status === 'processing').length || 0;
+      const lowStockProducts = products?.filter(p => (p.stock_quantity || 0) < 5) || [];
+
+      return { totalRevenue, activeOrders, totalProducts: products?.length || 0, lowStockProducts };
+    }
   });
+};
 
-  return { isAdmin: isAdmin ?? false, isCheckingAdmin };
-}
-
-export function useAdminProducts() {
-  const queryClient = useQueryClient();
-
-  const { data: products, isLoading } = useQuery({
-    queryKey: ['admin-products'],
+// 2. PRODUCTS (List View)
+export const useAdminProducts = () => {
+  return useQuery({
+    queryKey: ['adminProducts'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .order('created_at', { ascending: false });
-
+      
       if (error) throw error;
       return data;
-    },
+    }
   });
+};
 
-  const createProduct = useMutation({
-    mutationFn: async (product: {
-      name: string;
-      description?: string;
-      price: number;
-      category: 'hoodie' | 't-shirt' | 'shirt';
-      image_url: string;
-      stock_quantity: number;
-      sizes?: string[];
-      colors?: string[];
-      is_featured?: boolean;
-      is_new?: boolean;
-    }) => {
-      const { data, error } = await supabase
-        .from('products')
-        .insert(product)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-  });
-
-  const updateProduct = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
-      const { data, error } = await supabase
-        .from('products')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-  });
-
-  const deleteProduct = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-    },
-  });
-
-  return {
-    products,
-    isLoading,
-    createProduct,
-    updateProduct,
-    deleteProduct,
-  };
-}
-
-export function useAdminOrders() {
+// 3. DELETE PRODUCT
+export const useDeleteProduct = () => {
   const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('products').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Product deleted successfully');
+      queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
+    }
+  });
+};
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ['admin-orders'],
+// 4. ORDERS (Order Management) - TEST VERSION
+export const useAdminOrders = () => {
+  return useQuery({
+    queryKey: ['adminOrders'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          *,
-          profiles (full_name, email),
+          id,
+          status,
+          payment_status,
+          total_amount,
+          created_at,
+          shipping_address,
+          tracking_number,
+          carrier,
           order_items (
             id,
             product_name,
             quantity,
             size,
+            color,
             price_at_purchase
           )
-        `)
+        `) // Removed profiles join to isolate the error
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data;
-    },
+    }
   });
+};
 
-  const updateOrderStatus = useMutation({
-    mutationFn: async ({ id, status, trackingNumber, carrier }: {
-      id: string;
-      status: string;
-      trackingNumber?: string;
-      carrier?: string;
+// 5. UPDATE ORDER STATUS
+export const useUpdateOrderStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, status, trackingNumber, carrier }: { 
+      id: string; 
+      status: OrderStatus; 
+      trackingNumber?: string; 
+      carrier?: string; 
     }) => {
-      const updates: Record<string, unknown> = { status };
-      
-      if (trackingNumber) updates.tracking_number = trackingNumber;
-      if (carrier) updates.carrier = carrier;
-      if (status === 'shipped') updates.shipped_at = new Date().toISOString();
-      if (status === 'delivered') updates.delivered_at = new Date().toISOString();
-
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('orders')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
+        .update({ 
+          status, 
+          tracking_number: trackingNumber, 
+          carrier 
+        })
+        .eq('id', id);
+      
       if (error) throw error;
-      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      toast.success('Order updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
     },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to update order';
+      toast.error(message);
+      console.error(error);
+    }
   });
-
-  return {
-    orders,
-    isLoading,
-    updateOrderStatus,
-  };
-}
-
-export function useAdminStats() {
-  return useQuery({
-    queryKey: ['admin-stats'],
-    queryFn: async () => {
-      // Get total revenue
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('total_amount, status');
-
-      const totalRevenue = orders?.reduce((sum, order) => sum + Number(order.total_amount), 0) ?? 0;
-      const activeOrders = orders?.filter((o) => o.status === 'pending' || o.status === 'processing').length ?? 0;
-
-      // Get low stock products
-      const { data: lowStockProducts } = await supabase
-        .from('products')
-        .select('id, name, stock_quantity')
-        .lt('stock_quantity', 10)
-        .order('stock_quantity', { ascending: true });
-
-      // Get total products
-      const { count: totalProducts } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true });
-
-      return {
-        totalRevenue,
-        activeOrders,
-        lowStockProducts: lowStockProducts ?? [],
-        totalProducts: totalProducts ?? 0,
-      };
-    },
-  });
-}
+};

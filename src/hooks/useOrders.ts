@@ -15,12 +15,8 @@ export function useOrders() {
         .select(`
           *,
           order_items (
-            id,
-            product_name,
-            quantity,
-            size,
-            color,
-            price_at_purchase
+            *,
+            products (image_url)
           )
         `)
         .eq('user_id', user.id)
@@ -46,16 +42,8 @@ export function useOrder(orderId: string) {
         .select(`
           *,
           order_items (
-            id,
-            product_name,
-            quantity,
-            size,
-            color,
-            price_at_purchase,
-            product_id,
-            products (
-              image_url
-            )
+            *,
+            products (image_url)
           )
         `)
         .eq('id', orderId)

@@ -1,139 +1,263 @@
-import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { User, Package, Heart, LogOut, Settings } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { Link, useNavigate } from 'react-router-dom'; // Added useNavigate
+import { useState, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, User as UserIcon, ShoppingBag, Menu, X, PlusCircle, LogOut } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
+import CartDrawer from '../components/layout/CartDrawer';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast'; // Import Toast
 
-export default function Profile() {
-  const { user, loading, signOut, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
+// 1. NEW IMPORTS: For the Logout Popup
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const navLinks = [
+  { href: '/shop', label: 'Shop' },
+  { href: '/new-drops', label: 'New Drops' },
+  { href: '/about', label: 'About' },
+];
+
+export default function Header() {
+  const navigate = useNavigate(); // Hook for navigation
+  const { toast } = useToast();
+  const { itemCount } = useCart();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // State for the Logout Dialog
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      navigate('/auth');
-    }
-  }, [loading, isAuthenticated, navigate]);
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
 
-  const handleSignOut = async () => {
-    const { error } = await signOut();
-    if (error) {
-      toast.error('Failed to sign out');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Admin Check
+  const { data: isAdmin } = useQuery({
+    queryKey: ['checkAdmin', user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .single();
+      return !!data;
+    },
+    enabled: !!user
+  });
+
+  // 2. NEW: Handle the Icon Click
+  const handleProfileClick = (e: React.MouseEvent) => {
+    e.preventDefault(); // Stop normal link behavior
+    
+    if (user) {
+      // If logged in -> Show "Do you want to sign out?"
+      setShowLogoutDialog(true);
     } else {
-      toast.success('Signed out successfully');
-      navigate('/');
+      // If NOT logged in -> Go to Login Page
+      navigate('/auth');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <Skeleton className="h-12 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) return null;
-
-  const menuItems = [
-    {
-      icon: User,
-      title: 'Account Details',
-      description: 'Update your personal information',
-      href: '/profile/details',
-    },
-    {
-      icon: Package,
-      title: 'Orders',
-      description: 'View your order history',
-      href: '/profile/orders',
-    },
-    {
-      icon: Heart,
-      title: 'Wishlist',
-      description: 'Products you\'ve saved',
-      href: '/profile/wishlist',
-    },
-    {
-      icon: Settings,
-      title: 'Settings',
-      description: 'Manage preferences',
-      href: '/profile/settings',
-    },
-  ];
+  // 3. NEW: Handle Actual Logout
+  const confirmLogout = async () => {
+    await supabase.auth.signOut();
+    toast({ title: "Signed out successfully" });
+    navigate('/auth'); // Go to login page after signing out
+    setShowLogoutDialog(false);
+  };
 
   return (
-    <div className="min-h-screen bg-secondary">
-      {/* Header */}
-      <div className="bg-primary text-primary-foreground py-12 md:py-16">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+    <header className="fixed top-0 left-0 right-0 z-50 glass-header">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-16 md:h-20">
+          <Link 
+            to="/" 
+            className="font-heading text-2xl md:text-3xl font-bold tracking-tighter"
           >
-            <h1 className="font-heading text-3xl md:text-5xl font-bold mb-2">
-              MY ACCOUNT
-            </h1>
-            <p className="text-primary-foreground/70">
-              Welcome back, {user.email}
-            </p>
-          </motion.div>
-        </div>
-      </div>
+            BROKEBOY
+          </Link>
 
-      {/* Content */}
-      <div className="container mx-auto px-4 py-8 md:py-12">
-        <div className="max-w-4xl mx-auto">
-          {/* Menu Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {menuItems.map((item, index) => (
-              <motion.div
-                key={item.title}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+          <nav className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                className="font-heading text-sm tracking-wider hover:text-muted-foreground transition-colors relative group"
               >
-                <Link to={item.href}>
-                  <div className="card-brutal p-6 bg-background hover:bg-surface-hover transition-colors cursor-pointer">
-                    <item.icon className="w-8 h-8 mb-4" />
-                    <h3 className="font-heading text-lg tracking-wider mb-1">
-                      {item.title.toUpperCase()}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {item.description}
-                    </p>
-                  </div>
-                </Link>
-              </motion.div>
+                {link.label}
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full" />
+              </Link>
             ))}
-          </div>
 
-          {/* Sign Out */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Button
-              onClick={handleSignOut}
-              variant="outline"
-              className="w-full btn-brutal-outline"
+            {isAdmin && (
+              <Link to="/admin/add">
+                <Button variant="destructive" size="sm" className="font-heading tracking-wider">
+                  <PlusCircle className="w-4 h-4 mr-2" />
+                  NEW DROP
+                </Button>
+              </Link>
+            )}
+          </nav>
+
+          <div className="flex items-center gap-2 md:gap-4">
+            <AnimatePresence>
+              {isSearchOpen && (
+                <motion.div
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 200, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  className="hidden md:block overflow-hidden"
+                >
+                  <Input
+                    placeholder="Search..."
+                    className="border-2 border-primary h-9"
+                    autoFocus
+                    onBlur={() => setIsSearchOpen(false)}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="p-2 hover:bg-secondary transition-colors"
+              aria-label="Search"
             >
-              <LogOut className="w-4 h-4 mr-2" />
-              SIGN OUT
-            </Button>
-          </motion.div>
+              <Search className="w-5 h-5" />
+            </button>
+
+            {/* --- 4. MODIFIED: User Icon Button --- */}
+            <button
+              onClick={handleProfileClick}
+              className="p-2 hover:bg-secondary transition-colors hidden md:flex"
+              aria-label="Account"
+            >
+              {/* If user is logged in, show LogOut icon hint, otherwise User icon */}
+              {user ? <LogOut className="w-5 h-5 text-red-500" /> : <UserIcon className="w-5 h-5" />}
+            </button>
+            {/* ----------------------------------- */}
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  className="p-2 hover:bg-secondary transition-colors relative"
+                  aria-label="Cart"
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  {itemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent text-accent-foreground text-xs font-bold flex items-center justify-center">
+                      {itemCount}
+                    </span>
+                  )}
+                </button>
+              </SheetTrigger>
+              <SheetContent className="w-full sm:max-w-lg p-0 border-l-2 border-primary">
+                <CartDrawer />
+              </SheetContent>
+            </Sheet>
+
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 hover:bg-secondary transition-colors md:hidden"
+              aria-label="Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.nav
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="md:hidden border-t-2 border-primary overflow-hidden"
+            >
+              <div className="py-4 space-y-4">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    to={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block font-heading text-lg tracking-wider py-2"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                
+                {isAdmin && (
+                  <Link
+                    to="/admin/add"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block font-heading text-lg tracking-wider py-2 text-red-500 font-bold"
+                  >
+                    + NEW DROP (ADMIN)
+                  </Link>
+                )}
+
+                {/* Mobile Logout Logic */}
+                <button
+                  onClick={(e) => {
+                    setIsMobileMenuOpen(false);
+                    handleProfileClick(e);
+                  }}
+                  className="block w-full text-left font-heading text-lg tracking-wider py-2"
+                >
+                  {user ? "Sign Out" : "Login / Account"}
+                </button>
+
+              </div>
+            </motion.nav>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+
+      {/* --- 5. NEW: Logout Confirmation Dialog --- */}
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent className="border-2 border-primary">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-heading tracking-wider">SIGN OUT?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out of your account?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="btn-brutal-outline border-2">CANCEL</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700 text-white font-heading tracking-wider"
+            >
+              SIGN OUT
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* ---------------------------------------- */}
+
+    </header>
   );
 }

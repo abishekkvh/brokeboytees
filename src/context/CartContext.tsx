@@ -1,12 +1,16 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
+// 1. Updated Interface to include color
 export interface CartItem {
   id: string;
   name: string;
   price: number;
+  sale_price?: number | null;
   image_url: string;
   quantity: number;
   size: string;
+  color: string; // Added color property
+  category?: string;
 }
 
 interface CartState {
@@ -14,10 +18,11 @@ interface CartState {
   isOpen: boolean;
 }
 
+// 2. Updated Actions to handle color for unique identification
 type CartAction =
   | { type: 'ADD_ITEM'; payload: CartItem }
-  | { type: 'REMOVE_ITEM'; payload: { id: string; size: string } }
-  | { type: 'UPDATE_QUANTITY'; payload: { id: string; size: string; quantity: number } }
+  | { type: 'REMOVE_ITEM'; payload: { id: string; size: string; color: string } }
+  | { type: 'UPDATE_QUANTITY'; payload: { id: string; size: string; color: string; quantity: number } }
   | { type: 'CLEAR_CART' }
   | { type: 'TOGGLE_CART' }
   | { type: 'SET_CART_OPEN'; payload: boolean }
@@ -27,8 +32,8 @@ const CartContext = createContext<{
   state: CartState;
   dispatch: React.Dispatch<CartAction>;
   addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
-  removeItem: (id: string, size: string) => void;
-  updateQuantity: (id: string, size: string, quantity: number) => void;
+  removeItem: (id: string, size: string, color: string) => void;
+  updateQuantity: (id: string, size: string, color: string, quantity: number) => void;
   clearCart: () => void;
   toggleCart: () => void;
   setCartOpen: (open: boolean) => void;
@@ -39,8 +44,12 @@ const CartContext = createContext<{
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD_ITEM': {
+      // 3. Check for match on ID, SIZE, and COLOR
       const existingIndex = state.items.findIndex(
-        (item) => item.id === action.payload.id && item.size === action.payload.size
+        (item) => 
+          item.id === action.payload.id && 
+          item.size === action.payload.size && 
+          item.color === action.payload.color
       );
       
       if (existingIndex > -1) {
@@ -55,7 +64,11 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       return {
         ...state,
         items: state.items.filter(
-          (item) => !(item.id === action.payload.id && item.size === action.payload.size)
+          (item) => !(
+            item.id === action.payload.id && 
+            item.size === action.payload.size && 
+            item.color === action.payload.color
+          )
         ),
       };
     case 'UPDATE_QUANTITY': {
@@ -63,14 +76,20 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         return {
           ...state,
           items: state.items.filter(
-            (item) => !(item.id === action.payload.id && item.size === action.payload.size)
+            (item) => !(
+              item.id === action.payload.id && 
+              item.size === action.payload.size && 
+              item.color === action.payload.color
+            )
           ),
         };
       }
       return {
         ...state,
         items: state.items.map((item) =>
-          item.id === action.payload.id && item.size === action.payload.size
+          item.id === action.payload.id && 
+          item.size === action.payload.size && 
+          item.color === action.payload.color
             ? { ...item, quantity: action.payload.quantity }
             : item
         ),
@@ -94,7 +113,6 @@ const CART_STORAGE_KEY = 'brokeboy-cart';
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, { items: [], isOpen: false });
 
-  // Load cart from localStorage on mount
   useEffect(() => {
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
     if (savedCart) {
@@ -107,7 +125,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Save cart to localStorage on change
   useEffect(() => {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.items));
   }, [state.items]);
@@ -116,12 +133,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'ADD_ITEM', payload: { ...item, quantity: item.quantity || 1 } });
   };
 
-  const removeItem = (id: string, size: string) => {
-    dispatch({ type: 'REMOVE_ITEM', payload: { id, size } });
+  const removeItem = (id: string, size: string, color: string) => {
+    dispatch({ type: 'REMOVE_ITEM', payload: { id, size, color } });
   };
 
-  const updateQuantity = (id: string, size: string, quantity: number) => {
-    dispatch({ type: 'UPDATE_QUANTITY', payload: { id, size, quantity } });
+  const updateQuantity = (id: string, size: string, color: string, quantity: number) => {
+    dispatch({ type: 'UPDATE_QUANTITY', payload: { id, size, color, quantity } });
   };
 
   const clearCart = () => {
@@ -137,7 +154,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const itemCount = state.items.reduce((acc, item) => acc + item.quantity, 0);
-  const subtotal = state.items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  
+  // 4. Subtotal calculation uses sale_price if available
+  const subtotal = state.items.reduce((acc, item) => {
+    const price = item.sale_price || item.price;
+    return acc + price * item.quantity;
+  }, 0);
 
   return (
     <CartContext.Provider

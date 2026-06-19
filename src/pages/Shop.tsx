@@ -41,7 +41,8 @@ const sizes = ['S', 'M', 'L', 'XL', 'XXL'];
 
 export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [priceRange, setPriceRange] = useState([0, 200]);
+  // Adjusted default price range for INR (0 to 5000)
+  const [priceRange, setPriceRange] = useState([0, 5000]);
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -51,7 +52,8 @@ export default function Shop() {
     size: true,
   });
 
-  const categoryParam = searchParams.get('category') as CategoryOption;
+  const rawCategory = searchParams.get('category');
+  const categoryParam = rawCategory ? rawCategory.toLowerCase() as CategoryOption : undefined;
 
   const { data: products, isLoading, error } = useProducts({
     category: categoryParam,
@@ -80,7 +82,7 @@ export default function Shop() {
   const clearFilters = () => {
     searchParams.delete('category');
     setSearchParams(searchParams);
-    setPriceRange([0, 200]);
+    setPriceRange([0, 5000]);
     setSelectedSizes([]);
     setSortBy('newest');
   };
@@ -131,13 +133,13 @@ export default function Shop() {
               value={priceRange}
               onValueChange={setPriceRange}
               min={0}
-              max={200}
-              step={10}
+              max={5000} // Increased for INR
+              step={50}
               className="mb-4"
             />
-            <div className="flex justify-between text-sm">
-              <span>${priceRange[0]}</span>
-              <span>${priceRange[1]}</span>
+            <div className="flex justify-between text-sm font-bold">
+              <span>₹{priceRange[0]}</span>
+              <span>₹{priceRange[1]}</span>
             </div>
           </div>
         </CollapsibleContent>

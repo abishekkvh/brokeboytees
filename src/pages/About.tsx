@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Users, Truck, Recycle, Award } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import image from "../assets/hero-streetwear.jpg";
 
 const values = [
   {
@@ -16,8 +17,8 @@ const values = [
   },
   {
     icon: Truck,
-    title: 'Global Reach',
-    description: 'Free worldwide shipping on orders over $150. No borders, no limits.',
+    title: 'Nation Reach',
+  description: 'Free worldwide shipping on orders over ₹500. No borders, no limits.',
   },
   {
     icon: Award,
@@ -33,7 +34,7 @@ export default function About() {
       <section className="relative h-[70vh] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1600"
+            src={image}
             alt="About BROKEBOY"
             className="w-full h-full object-cover"
           />
@@ -75,7 +76,7 @@ export default function About() {
                   categorized.
                 </p>
                 <p>
-                  Starting with a single hoodie design and a $500 budget, we built a 
+                  Starting with a single hoodie design and a ₹500 budget, we built a 
                   brand that speaks to the outsiders, the dreamers, and the ones who 
                   were told they'd never make it.
                 </p>
@@ -94,7 +95,7 @@ export default function About() {
               className="card-brutal overflow-hidden"
             >
               <img
-                src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=800"
+                src={image}
                 alt="BROKEBOY founder"
                 className="w-full h-full object-cover"
               />
@@ -143,8 +144,8 @@ export default function About() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             {[
-              { value: '100+', label: 'Countries' },
-              { value: '50K+', label: 'Customers' },
+              { value: '10+', label: 'Cities' },
+              { value: '5K+', label: 'Customers' },
               { value: '500+', label: 'Designs' },
               { value: '4.9', label: 'Rating' },
             ].map((stat, index) => (
