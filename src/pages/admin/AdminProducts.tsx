@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Trash2, Upload, X, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Upload, X, Loader2, Edit } from "lucide-react";
 import { useAdminProducts, useDeleteProduct } from "@/hooks/useAdmin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,16 +22,15 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 
-// Define the specific type your DB expects
 type CategoryType = "hoodie" | "t-shirt" | "shirt" | "bottoms";
 
 const AVAILABLE_SIZES = ["S", "M", "L", "XL", "XXL", "3XL"];
 
 export default function AdminProducts() {
-  // Now this hook returns the standard { data, isLoading } object
   const { data: products, isLoading } = useAdminProducts();
   const deleteProduct = useDeleteProduct();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any>(null);
 
   if (isLoading) return <div className="p-8">Loading products...</div>;
 
@@ -39,7 +38,7 @@ export default function AdminProducts() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-heading font-bold">PRODUCTS</h1>
-        <AddProductDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+        <ProductFormDialog open={isAddOpen} onOpenChange={setIsAddOpen} />
       </div>
 
       <div className="grid gap-4">
@@ -57,12 +56,7 @@ export default function AdminProducts() {
               <div>
                 <h3 className="font-heading font-bold">{product.name}</h3>
                 <p className="text-sm text-muted-foreground">
-                  ₹{product.sale_price || product.price}
-                  {product.sale_price && (
-                    <span className="ml-2 line-through text-red-400 text-xs">
-                      ₹{product.price}
-                    </span>
-                  )}
+                  ₹{product.price}
                 </p>
                 <div className="flex gap-1 mt-1">
                   {product.sizes?.map((s: string) => (
@@ -73,36 +67,51 @@ export default function AdminProducts() {
                 </div>
               </div>
             </div>
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this product?")) {
-                  deleteProduct.mutate(product.id);
-                }
-              }}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setEditingProduct(product)}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={() => {
+                  if (confirm("Are you sure you want to delete this product?")) {
+                    deleteProduct.mutate(product.id);
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         ))}
       </div>
+
+      {editingProduct && (
+        <ProductFormDialog
+          open={!!editingProduct}
+          onOpenChange={(open) => !open && setEditingProduct(null)}
+          initialProduct={editingProduct}
+        />
+      )}
     </div>
   );
 }
 
-export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ProductFormDialog({ open, onOpenChange, initialProduct }: { open: boolean; onOpenChange: (open: boolean) => void; initialProduct?: any }) {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   
-  // Typed State to match Supabase Enums
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     price: "",
-    sale_price: "",
-    category: "hoodie" as CategoryType, // <--- FIXED: Explicit Type
+    category: "hoodie" as CategoryType,
     stock_quantity: "",
     image_url: "",
     colors: [] as string[],
@@ -110,6 +119,27 @@ export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpen
   
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [colorInput, setColorInput] = useState("");
+
+  useEffect(() => {
+    if (open && initialProduct) {
+      setFormData({
+        name: initialProduct.name || "",
+        description: initialProduct.description || "",
+        price: initialProduct.price ? String(initialProduct.price) : "",
+        category: (initialProduct.category as CategoryType) || "hoodie",
+        stock_quantity: initialProduct.stock_quantity ? String(initialProduct.stock_quantity) : "",
+        image_url: initialProduct.image_url || "",
+        colors: initialProduct.colors || [],
+      });
+      setSelectedSizes(initialProduct.sizes || []);
+    } else if (open && !initialProduct) {
+      setFormData({
+        name: "", description: "", price: "", 
+        category: "hoodie", stock_quantity: "", image_url: "", colors: []
+      });
+      setSelectedSizes([]);
+    }
+  }, [open, initialProduct]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -160,36 +190,34 @@ export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpen
         return;
       }
 
-      // @ts-expect-error: Database types are not yet synced with local definitions
-      const { error } = await supabase.from("products").insert({
+      const payload = {
         name: formData.name,
         description: formData.description,
         price: Number(formData.price),
-        sale_price: formData.sale_price ? Number(formData.sale_price) : null,
-        category: formData.category, // TypeScript now knows this is valid
+        category: formData.category,
         stock_quantity: Number(formData.stock_quantity) || 0,
         image_url: formData.image_url,
         sizes: selectedSizes,
         colors: formData.colors,
-        is_new: true,
-      });
+      };
 
-      if (error) throw error;
+      if (initialProduct) {
+        // Update existing
+        const { error } = await supabase.from("products").update(payload).eq("id", initialProduct.id);
+        if (error) throw error;
+        toast.success("Product updated successfully!");
+      } else {
+        // Insert new
+        const { error } = await supabase.from("products").insert(payload);
+        if (error) throw error;
+        toast.success("Product added successfully!");
+      }
 
-      toast.success("Product added successfully!");
       queryClient.invalidateQueries({ queryKey: ["adminProducts"] });
       onOpenChange(false);
-      
-      // Reset Form
-      setFormData({
-        name: "", description: "", price: "", sale_price: "", 
-        category: "hoodie", stock_quantity: "", image_url: "", colors: []
-      });
-      setSelectedSizes([]);
-
     } catch (error) {
       console.error(error);
-      toast.error("Failed to create product");
+      toast.error(`Failed to ${initialProduct ? 'update' : 'create'} product`);
     } finally {
       setLoading(false);
     }
@@ -197,14 +225,18 @@ export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button className="btn-brutal bg-black text-white hover:bg-gray-800">
-          <Plus className="mr-2 h-4 w-4" /> NEW DROP
-        </Button>
-      </DialogTrigger>
+      {!initialProduct && (
+        <DialogTrigger asChild>
+          <Button className="btn-brutal bg-black text-white hover:bg-gray-800">
+            <Plus className="mr-2 h-4 w-4" /> NEW DROP
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-background border-2 border-black">
         <DialogHeader>
-          <DialogTitle className="font-heading text-2xl">ADD NEW DROP</DialogTitle>
+          <DialogTitle className="font-heading text-2xl">
+            {initialProduct ? "EDIT DROP" : "ADD NEW DROP"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
@@ -255,14 +287,10 @@ export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpen
             <Textarea placeholder="Product details..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold">Original Price (₹)</label>
+              <label className="text-sm font-bold">Price (₹)</label>
               <Input type="number" placeholder="999" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-red-500">Sale Price (Optional)</label>
-              <Input type="number" placeholder="799" className="border-red-200 focus:border-red-500" value={formData.sale_price} onChange={(e) => setFormData({...formData, sale_price: e.target.value})} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold">Stock Qty</label>
@@ -314,7 +342,7 @@ export function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpen
 
           <Button onClick={handleSubmit} className="w-full btn-brutal bg-green-500 text-white hover:bg-green-600 h-12 text-lg" disabled={loading || uploading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            {loading ? "ADDING..." : "PUBLISH DROP"}
+            {loading ? "SAVING..." : (initialProduct ? "SAVE CHANGES" : "PUBLISH DROP")}
           </Button>
         </div>
       </DialogContent>
