@@ -129,6 +129,21 @@ export default function Checkout() {
       // This will trigger a notification for abishekvh@gmail.com
       console.log(`NEW ORDER: ${order.id} for abishekvh@gmail.com`);
 
+      // WhatsApp Redirect
+      let message = `*New Order Placed!*\n`;
+      message += `*Order ID:* ${order.id}\n`;
+      message += `*Name:* ${formData.fullName}\n`;
+      message += `*Phone:* ${formData.phone}\n`;
+      message += `*Address:* ${formData.address}, ${formData.city}, ${formData.postalCode}\n\n`;
+      message += `*Order Items:*\n`;
+      items.forEach(item => {
+        message += `- ${item.quantity}x ${item.name} (Size: ${item.size}, Color: ${item.color})\n`;
+      });
+      message += `\n*Total:* ${formatPrice(total)}`;
+      
+      const encodedText = encodeURIComponent(message);
+      window.open(`https://wa.me/919629440445?text=${encodedText}`, '_blank');
+
       clearCart();
       toast.success('Order placed successfully!');
       navigate(`/order-confirmation/${order.id}`);
