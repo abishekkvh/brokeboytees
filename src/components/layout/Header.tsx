@@ -39,6 +39,7 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   const { data: isAdmin } = useQuery({
     queryKey: ['checkAdmin', user?.id],
@@ -155,7 +156,7 @@ export default function Header() {
               {user ? <LogOut className="w-5 h-5 text-red-500" /> : <UserIcon className="w-5 h-5" />}
             </button>
 
-            <Sheet>
+            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
               <SheetTrigger asChild>
                 <button
                   className="p-2 hover:bg-secondary transition-colors relative"
@@ -170,7 +171,7 @@ export default function Header() {
                 </button>
               </SheetTrigger>
               <SheetContent className="w-full sm:max-w-lg p-0 border-l-2 border-primary">
-                <CartDrawer />
+                <CartDrawer setOpen={setIsCartOpen} />
               </SheetContent>
             </Sheet>
 
