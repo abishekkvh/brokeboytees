@@ -99,8 +99,10 @@ export default function Checkout() {
           user_id: user?.id || null,
           status: 'pending',
           total_amount: total,
-          phone_number: formData.phone, // Captured mobile number
           shipping_address: `${formData.address}, ${formData.city}, ${formData.postalCode}, ${formData.country}`,
+          shipping_city: formData.city,
+          shipping_postal_code: formData.postalCode,
+          shipping_country: formData.country,
           payment_status: 'pending',
         })
         .select()
