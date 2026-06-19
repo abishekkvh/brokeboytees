@@ -13,6 +13,7 @@ import ProductDetail from "./pages/ProductDetail";
 import NewDrops from "./pages/NewDrops";
 import About from "./pages/About";
 import Auth from "./pages/Auth";
+import SeedProducts from "./pages/SeedProducts";
 import Profile from "./pages/Profile";
 import Checkout from "./pages/Checkout";
 import OrderConfirmation from "./pages/OrderConfirmation";
@@ -69,6 +70,8 @@ const App = () => (
               <Route path="orders" element={<AdminOrders />} />
               <Route path="add" element={<AddProduct />} /> 
             </Route>
+            
+            <Route path="/seed" element={<SeedProducts />} />
 
             {/* 404 */}
             <Route path="*" element={<NotFound />} />
