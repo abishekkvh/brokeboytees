@@ -15,23 +15,16 @@ export default function SeedProducts() {
       const path = `/clothes/${clothesFiles[i]}`;
       const name = `Drop ${i + 1} - Exclusive Edition`;
       const price = 1499 + Math.floor(Math.random() * 1000);
-      const is_on_sale = Math.random() > 0.5;
-      const sale_price = is_on_sale ? price - 500 : null;
-      const is_new = i < 10;
-      
       const { error } = await supabase.from('products').insert({
         name: name,
         description: 'Premium heavyweight cotton streetwear. Oversized, boxy fit.',
         price: price,
-        sale_price: sale_price,
         image_url: path,
         category: 't-shirt',
         sizes: ['S', 'M', 'L', 'XL'],
         colors: ['Black', 'White', 'Ash Grey'],
         stock_quantity: 50,
-        is_featured: i < 8,
-        is_new: is_new,
-        is_on_sale: is_on_sale
+        is_featured: i < 8
       });
       
       if (error) {
