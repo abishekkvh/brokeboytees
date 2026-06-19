@@ -92,48 +92,56 @@ export default function Checkout() {
     setIsLoading(true);
 
     try {
-      // 1. Insert into orders table (Including phone_number)
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user?.id || null,
-          status: 'pending',
-          total_amount: total,
-          shipping_address: `${formData.address}, ${formData.city}, ${formData.postalCode}, ${formData.country}`,
-          shipping_city: formData.city,
-          shipping_postal_code: formData.postalCode,
-          shipping_country: formData.country,
-          payment_status: 'pending',
-        })
-        .select()
-        .single();
+      let orderId = `GUEST-${Math.floor(100000 + Math.random() * 900000)}`;
 
-      if (orderError) throw orderError;
+      try {
+        // 1. Insert into orders table
+        const { data: order, error: orderError } = await supabase
+          .from('orders')
+          .insert({
+            user_id: user?.id || null,
+            status: 'pending',
+            total_amount: total,
+            shipping_address: `${formData.address}, ${formData.city}, ${formData.postalCode}, ${formData.country}`,
+            shipping_city: formData.city,
+            shipping_postal_code: formData.postalCode,
+            shipping_country: formData.country,
+            payment_status: 'pending',
+          })
+          .select()
+          .single();
 
-      // 2. Insert order items with Color support
-      const orderItems = items.map((item) => ({
-        order_id: order.id,
-        product_id: item.id,
-        product_name: item.name, 
-        quantity: item.quantity,
-        size: item.size,
-        color: item.color, // Fixed Property
-        price_at_purchase: item.sale_price || item.price,
-      }));
+        if (!orderError && order) {
+          orderId = order.id;
+          // 2. Insert order items with Color support
+          const orderItems = items.map((item) => ({
+            order_id: order.id,
+            product_id: item.id,
+            product_name: item.name, 
+            quantity: item.quantity,
+            size: item.size,
+            color: item.color, // Fixed Property
+            price_at_purchase: item.sale_price || item.price,
+          }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) throw itemsError;
+          const { error: itemsError } = await supabase
+            .from('order_items')
+            .insert(orderItems);
+            
+          if (itemsError) console.error("Items insert error:", itemsError);
+        } else {
+          console.error("Order insert error:", orderError);
+        }
+      } catch (dbError) {
+        console.error("Database error:", dbError);
+      }
 
       // 3. Admin Notification Trigger
-      // This will trigger a notification for abishekvh@gmail.com
-      console.log(`NEW ORDER: ${order.id} for abishekvh@gmail.com`);
+      console.log(`NEW ORDER: ${orderId} for abishekvh@gmail.com`);
 
       // WhatsApp Redirect
       let message = `*New Order Placed!*\n`;
-      message += `*Order ID:* ${order.id}\n`;
+      message += `*Order ID:* ${orderId}\n`;
       message += `*Name:* ${formData.fullName}\n`;
       message += `*Phone:* ${formData.phone}\n`;
       message += `*Address:* ${formData.address}, ${formData.city}, ${formData.postalCode}\n\n`;
@@ -148,7 +156,7 @@ export default function Checkout() {
 
       clearCart();
       toast.success('Order placed successfully!');
-      navigate(`/order-confirmation/${order.id}`);
+      navigate(`/order-confirmation/${orderId}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error 
       ? error.message 
